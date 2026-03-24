@@ -3,38 +3,14 @@
   "version": "0.1.0",
   "description": "Real-time task tracker that syncs with Claude Code",
   "main": "mcp/server.js",
+  "type": "commonjs",
   "scripts": {
-    "start": "node mcp/server.js",
-    "test": "node mcp/server.js --test"
+    "start": "node mcp/server.js"
   },
-  "keywords": [
-    "claude",
-    "claude-code",
-    "mcp",
-    "task-tracker",
-    "project-management"
-  ],
+  "keywords": ["claude", "claude-code", "mcp", "task-tracker"],
   "author": "",
   "license": "MIT",
   "engines": {
     "node": ">=18.0.0"
   }
 }
-```
-
-4. Commit message 填：`chore: add package.json`
-5. 点 **Commit changes**
-
----
-
-## 第六步 — 创建 `.gitignore` 补充
-
-GitHub 自动生成的 Node `.gitignore` 已经够用，但我们要确保 `data/tasks.json` 不被追踪（用户的私人任务数据不应该上传）。
-
-1. 点击仓库里已有的 `.gitignore` 文件
-2. 点右上角铅笔图标编辑
-3. 在文件末尾**追加**这几行：
-```
-# tracker data (local only)
-data/tasks.json
-.env

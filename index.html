@@ -116,22 +116,36 @@ const today = new Date();
 function fmt(d){ return d.toISOString().slice(0,10); }
 function addDays(d,n){ let x=new Date(d); x.setDate(x.getDate()+n); return x; }
 
-let tasks = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null') || [
-  {id:1,title:'Requirements',priority:'high',  status:'done', progress:100,start:fmt(addDays(today,-10)),due:fmt(addDays(today,-5))},
-  {id:2,title:'UI design',   priority:'high',  status:'done', progress:100,start:fmt(addDays(today,-8)), due:fmt(addDays(today,-2))},
-  {id:3,title:'Backend API', priority:'high',  status:'doing',progress:60, start:fmt(addDays(today,-3)), due:fmt(addDays(today,4))},
-  {id:4,title:'Frontend',    priority:'medium',status:'doing',progress:35, start:fmt(addDays(today,-1)), due:fmt(addDays(today,6))},
-  {id:5,title:'Tests',       priority:'medium',status:'todo', progress:0,  start:fmt(addDays(today,5)),  due:fmt(addDays(today,10))},
-  {id:6,title:'Deploy',      priority:'low',   status:'todo', progress:0,  start:fmt(addDays(today,9)),  due:fmt(addDays(today,12))},
-];
+let tasks = [];
+
+async function loadFromServer() {
+  try {
+    const res = await fetch('http://localhost:3000/tasks');
+    tasks = await res.json();
+    nextId = tasks.length ? Math.max(...tasks.map(t => t.id)) + 1 : 1;
+    render();
+  } catch {
+    console.warn('API server not running, using localStorage');
+    tasks = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null') || [];
+    nextId = tasks.length ? Math.max(...tasks.map(t => t.id)) + 1 : 1;
+    render();
+  }
+}
 let nextId = Math.max(...tasks.map(t=>t.id)) + 1;
 let dragId = null;
 
 const colors = {high:'#E24B4A',medium:'#BA7517',low:'#639922'};
 const pClass = {high:'p-high',medium:'p-medium',low:'p-low'};
 const pLabel = {high:'High',medium:'Medium',low:'Low'};
-
-function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks)); }
+function save() {
+  fetch('http://localhost:3000/tasks', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(tasks)
+  }).catch(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+  });
+}
 
 function render(){ renderStats(); renderKanban(); renderGantt(); renderProgress(); save(); }
 
@@ -249,7 +263,7 @@ function switchTab(name,btn){
   document.getElementById('view-'+name).classList.add('active');
 }
 
-render();
+loadFromServer();
 </script>
 </body>
 </html>

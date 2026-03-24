@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-const http = require('http');
 const fs   = require('fs');
 const path = require('path');
 
@@ -20,24 +19,21 @@ function saveTasks(tasks) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(tasks, null, 2));
 }
 
-// ── MCP tool definitions ──────────────────────────────────────────────────────
-
 const TOOLS = {
   list_tasks: {
     description: 'Return all tasks with their current status and progress.',
     inputSchema: { type: 'object', properties: {} },
     handler: () => loadTasks()
   },
-
   add_task: {
     description: 'Add a new task to the tracker.',
     inputSchema: {
       type: 'object',
       required: ['title'],
       properties: {
-        title:    { type: 'string',  description: 'Task title' },
-        priority: { type: 'string',  enum: ['high','medium','low'], default: 'medium' },
-        due:      { type: 'string',  description: 'Due date YYYY-MM-DD' },
+        title:    { type: 'string' },
+        priority: { type: 'string', enum: ['high','medium','low'] },
+        due:      { type: 'string' }
       }
     },
     handler: ({ title, priority = 'medium', due }) => {
@@ -54,14 +50,13 @@ const TOOLS = {
       return { ok: true, task };
     }
   },
-
   update_task_progress: {
-    description: 'Update the progress (0–100) and status of a task. Claude Code calls this automatically when it completes work.',
+    description: 'Update the progress (0-100) and status of a task.',
     inputSchema: {
       type: 'object',
       required: ['id', 'progress'],
       properties: {
-        id:       { type: 'number', description: 'Task ID' },
+        id:       { type: 'number' },
         progress: { type: 'number', minimum: 0, maximum: 100 },
         status:   { type: 'string', enum: ['todo','doing','done'] }
       }
@@ -71,14 +66,12 @@ const TOOLS = {
       const task = tasks.find(t => t.id === id);
       if (!task) return { ok: false, error: `Task ${id} not found` };
       task.progress = progress;
-      task.status   = status ?? (progress === 100 ? 'done' : progress > 0 ? 'doing' : 'todo');
+      task.status = status ?? (progress === 100 ? 'done' : progress > 0 ? 'doing' : 'todo');
       saveTasks(tasks);
       return { ok: true, task };
     }
   }
 };
-
-// ── Minimal MCP server (stdio transport) ─────────────────────────────────────
 
 process.stdin.setEncoding('utf8');
 let buf = '';
@@ -91,12 +84,16 @@ process.stdin.on('data', chunk => {
     line = line.trim();
     if (!line) return;
     try { handleMessage(JSON.parse(line)); }
-    catch (e) { send({ error: e.message }); }
+    catch (e) { sendError(null, -32700, 'Parse error'); }
   });
 });
 
 function send(obj) {
-  process.stdout.write(JSON.stringify(obj) + '\n');
+  process.stdout.write(JSON.stringify({ jsonrpc: '2.0', ...obj }) + '\n');
+}
+
+function sendError(id, code, message) {
+  send({ id, error: { code, message } });
 }
 
 function handleMessage(msg) {
@@ -109,6 +106,8 @@ function handleMessage(msg) {
       capabilities: { tools: {} }
     }});
   }
+
+  if (method === 'notifications/initialized') return;
 
   if (method === 'tools/list') {
     return send({ id, result: {
@@ -123,16 +122,20 @@ function handleMessage(msg) {
   if (method === 'tools/call') {
     const { name, arguments: args } = params;
     const tool = TOOLS[name];
-    if (!tool) return send({ id, error: { message: `Unknown tool: ${name}` } });
+    if (!tool) return sendError(id, -32601, `Unknown tool: ${name}`);
     try {
       const result = tool.handler(args || {});
-      return send({ id, result: { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] } });
+      return send({ id, result: {
+        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
+      }});
     } catch (e) {
-      return send({ id, error: { message: e.message } });
+      return sendError(id, -32603, e.message);
     }
   }
 
-  send({ id, error: { message: `Unknown method: ${method}` } });
+  if (method === 'ping') return send({ id, result: {} });
+
+  sendError(id, -32601, `Unknown method: ${method}`);
 }
 
-process.stderr.write('claude-code-tracker MCP server ready\n');
+process.stderr.write('claude-code-tracker MCP server ready\n')
