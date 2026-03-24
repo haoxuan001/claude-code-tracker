@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>claude-code-tracker</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8f7f4; color: #1a1a18; min-height: 100vh; }
+header { padding: 16px 24px; border-bottom: 1px solid #e5e3da; background: #fff; display: flex; align-items: center; justify-content: space-between; }
+header h1 { font-size: 15px; font-weight: 500; }
+header .sync { font-size: 12px; color: #888; display: flex; align-items: center; gap: 6px; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: #639922; animation: pulse 2s infinite; display: inline-block; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+.main { padding: 20px 24px; }
+.stats { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 18px; }
+.stat { background: #fff; border: 1px solid #e5e3da; border-radius: 10px; padding: 12px 14px; }
+.stat-label { font-size: 11px; color: #888; margin-bottom: 4px; }
+.stat-value { font-size: 22px; font-weight: 500; }
+.toolbar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+.toolbar input, .toolbar select { font-size: 13px; padding: 7px 10px; border: 1px solid #e5e3da; border-radius: 8px; background: #fff; color: #1a1a18; font-family: inherit; }
+.toolbar input { flex: 1; min-width: 140px; }
+.toolbar button { padding: 7px 14px; border-radius: 8px; border: 1px solid #e5e3da; background: #fff; font-size: 13px; cursor: pointer; font-family: inherit; }
+.toolbar button:hover { background: #f8f7f4; }
+.drop-zone { border: 1.5px dashed #c8c6bc; border-radius: 8px; padding: 8px 14px; font-size: 12px; color: #888; cursor: pointer; white-space: nowrap; }
+.drop-zone.over { border-color: #378ADD; color: #0C447C; }
+.tabs { display: flex; gap: 6px; margin-bottom: 14px; }
+.tab { padding: 6px 16px; border-radius: 8px; border: 1px solid #e5e3da; background: transparent; color: #888; cursor: pointer; font-size: 13px; font-family: inherit; }
+.tab.active { background: #fff; color: #1a1a18; border-color: #b0aea6; }
+.view { display: none; }
+.view.active { display: block; }
+/* Kanban */
+.kanban { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; }
+.col { background: #efefeb; border-radius: 12px; padding: 12px; min-height: 300px; }
+.col-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.col-title { font-size: 12px; font-weight: 500; color: #666; }
+.col-count { font-size: 11px; background: #fff; border: 1px solid #e5e3da; border-radius: 10px; padding: 1px 8px; color: #666; }
+.card { background: #fff; border: 1px solid #e5e3da; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; cursor: grab; }
+.card:hover { border-color: #b0aea6; }
+.card.dragging { opacity: .4; }
+.col.drag-over { outline: 2px dashed #b0aea6; }
+.card-title { font-size: 13px; font-weight: 500; margin-bottom: 6px; }
+.card-meta { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 500; }
+.p-high   { background: #FCEBEB; color: #A32D2D; }
+.p-medium { background: #FAEEDA; color: #854F0B; }
+.p-low    { background: #EAF3DE; color: #3B6D11; }
+.date-tag { font-size: 11px; color: #888; }
+.progress-bar { height: 3px; background: #efefeb; border-radius: 2px; margin-top: 8px; overflow: hidden; }
+.progress-fill { height: 100%; border-radius: 2px; transition: width .3s; }
+/* Gantt */
+.gantt-wrap { overflow-x: auto; }
+.gantt-row { display: flex; align-items: center; margin-bottom: 8px; gap: 0; }
+.gantt-label { width: 150px; min-width: 150px; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 10px; }
+.gantt-track { flex: 1; height: 24px; background: #efefeb; border-radius: 4px; position: relative; overflow: hidden; }
+.gantt-bar { height: 100%; border-radius: 4px; position: absolute; display: flex; align-items: center; padding: 0 8px; font-size: 11px; font-weight: 500; color: #fff; white-space: nowrap; overflow: hidden; }
+.gantt-today { position: absolute; top: 0; bottom: 0; width: 1.5px; background: #E24B4A; z-index: 2; }
+.gantt-days { display: flex; margin-left: 150px; margin-bottom: 4px; }
+.gantt-day { flex: 1; font-size: 11px; color: #888; text-align: center; }
+/* Progress */
+.prog-list { display: flex; flex-direction: column; gap: 10px; }
+.prog-item { background: #fff; border: 1px solid #e5e3da; border-radius: 10px; padding: 12px 14px; }
+.prog-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.prog-title { font-size: 13px; font-weight: 500; }
+.prog-pct { font-size: 13px; font-weight: 500; color: #888; }
+.prog-track { height: 6px; background: #efefeb; border-radius: 4px; overflow: hidden; }
+.prog-fill { height: 100%; border-radius: 4px; transition: width .3s; }
+input[type=range] { width: 100%; margin-top: 8px; accent-color: #378ADD; }
+</style>
+</head>
+<body>
+<header>
+  <h1>claude-code-tracker</h1>
+  <div class="sync"><span class="dot"></span> synced with Claude Code</div>
+</header>
+<div class="main">
+  <div class="stats" id="stats"></div>
+  <div class="toolbar">
+    <input id="new-title" placeholder="New task..." />
+    <select id="new-priority"><option value="high">High</option><option value="medium" selected>Medium</option><option value="low">Low</option></select>
+    <select id="new-status"><option value="todo">To do</option><option value="doing">In progress</option><option value="done">Done</option></select>
+    <input id="new-due" type="date" />
+    <button onclick="addTask()">+ Add</button>
+    <div class="drop-zone" id="drop-zone"
+      ondragover="event.preventDefault();this.classList.add('over')"
+      ondragleave="this.classList.remove('over')"
+      ondrop="handleDrop(event)">Drop PRD / doc here</div>
+  </div>
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('kanban',this)">Kanban</button>
+    <button class="tab" onclick="switchTab('gantt',this)">Gantt</button>
+    <button class="tab" onclick="switchTab('progress',this)">Progress</button>
+  </div>
+  <div class="view active" id="view-kanban">
+    <div class="kanban">
+      <div class="col" id="col-todo" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="dropCard(event,'todo')">
+        <div class="col-header"><span class="col-title">To do</span><span class="col-count" id="cnt-todo">0</span></div>
+        <div id="cards-todo"></div>
+      </div>
+      <div class="col" id="col-doing" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="dropCard(event,'doing')">
+        <div class="col-header"><span class="col-title">In progress</span><span class="col-count" id="cnt-doing">0</span></div>
+        <div id="cards-doing"></div>
+      </div>
+      <div class="col" id="col-done" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="dropCard(event,'done')">
+        <div class="col-header"><span class="col-title">Done</span><span class="col-count" id="cnt-done">0</span></div>
+        <div id="cards-done"></div>
+      </div>
+    </div>
+  </div>
+  <div class="view" id="view-gantt"><div class="gantt-wrap"><div id="gantt-inner"></div></div></div>
+  <div class="view" id="view-progress"><div class="prog-list" id="prog-list"></div></div>
+</div>
+<script>
+const STORAGE_KEY = 'cct_tasks';
+const today = new Date();
+function fmt(d){ return d.toISOString().slice(0,10); }
+function addDays(d,n){ let x=new Date(d); x.setDate(x.getDate()+n); return x; }
+
+let tasks = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null') || [
+  {id:1,title:'Requirements',priority:'high',  status:'done', progress:100,start:fmt(addDays(today,-10)),due:fmt(addDays(today,-5))},
+  {id:2,title:'UI design',   priority:'high',  status:'done', progress:100,start:fmt(addDays(today,-8)), due:fmt(addDays(today,-2))},
+  {id:3,title:'Backend API', priority:'high',  status:'doing',progress:60, start:fmt(addDays(today,-3)), due:fmt(addDays(today,4))},
+  {id:4,title:'Frontend',    priority:'medium',status:'doing',progress:35, start:fmt(addDays(today,-1)), due:fmt(addDays(today,6))},
+  {id:5,title:'Tests',       priority:'medium',status:'todo', progress:0,  start:fmt(addDays(today,5)),  due:fmt(addDays(today,10))},
+  {id:6,title:'Deploy',      priority:'low',   status:'todo', progress:0,  start:fmt(addDays(today,9)),  due:fmt(addDays(today,12))},
+];
+let nextId = Math.max(...tasks.map(t=>t.id)) + 1;
+let dragId = null;
+
+const colors = {high:'#E24B4A',medium:'#BA7517',low:'#639922'};
+const pClass = {high:'p-high',medium:'p-medium',low:'p-low'};
+const pLabel = {high:'High',medium:'Medium',low:'Low'};
+
+function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks)); }
+
+function render(){ renderStats(); renderKanban(); renderGantt(); renderProgress(); save(); }
+
+function renderStats(){
+  const total=tasks.length, done=tasks.filter(t=>t.status==='done').length;
+  const doing=tasks.filter(t=>t.status==='doing').length;
+  const pct=total?Math.round(tasks.reduce((a,t)=>a+t.progress,0)/total):0;
+  document.getElementById('stats').innerHTML=`
+    <div class="stat"><div class="stat-label">Total</div><div class="stat-value">${total}</div></div>
+    <div class="stat"><div class="stat-label">In progress</div><div class="stat-value">${doing}</div></div>
+    <div class="stat"><div class="stat-label">Done</div><div class="stat-value">${done}</div></div>
+    <div class="stat"><div class="stat-label">Overall</div><div class="stat-value">${pct}%</div></div>`;
+}
+
+function renderKanban(){
+  ['todo','doing','done'].forEach(s=>{
+    const ts=tasks.filter(t=>t.status===s);
+    document.getElementById('cnt-'+s).textContent=ts.length;
+    document.getElementById('cards-'+s).innerHTML=ts.map(t=>`
+      <div class="card" draggable="true" ondragstart="dragStart(${t.id})" ondragend="dragEnd()">
+        <div class="card-title">${t.title}</div>
+        <div class="card-meta">
+          <span class="badge ${pClass[t.priority]}">${pLabel[t.priority]}</span>
+          ${t.due?`<span class="date-tag">${t.due}</span>`:''}
+        </div>
+        ${s==='doing'?`<div class="progress-bar"><div class="progress-fill" style="width:${t.progress}%;background:${colors[t.priority]}"></div></div>`:''}
+      </div>`).join('');
+  });
+}
+
+function renderGantt(){
+  const all=[...tasks].sort((a,b)=>a.start.localeCompare(b.start));
+  const minD=new Date(Math.min(...all.map(t=>new Date(t.start))));
+  const maxD=new Date(Math.max(...all.map(t=>new Date(t.due))));
+  const span=Math.max(1,Math.round((maxD-minD)/86400000)+2);
+  const todayPct=Math.min(100,(Math.round((today-minD)/86400000)/span*100)).toFixed(1);
+  const labels=[];
+  for(let i=0;i<=span;i+=Math.ceil(span/5)) labels.push({p:(i/span*100).toFixed(1),l:fmt(addDays(minD,i)).slice(5)});
+  document.getElementById('gantt-inner').innerHTML=`
+    <div class="gantt-days">${labels.map(d=>`<span style="position:absolute;left:calc(150px + ${d.p}% * (100% - 150px)/100);transform:translateX(-50%);font-size:11px;color:#888">${d.l}</span>`).join('')}</div>
+    <div style="position:relative;height:16px;margin-bottom:6px;margin-left:150px">${labels.map(d=>`<span style="position:absolute;left:${d.p}%;transform:translateX(-50%);font-size:11px;color:#888">${d.l}</span>`).join('')}</div>
+    ${all.map(t=>{
+      const s=Math.max(0,Math.round((new Date(t.start)-minD)/86400000));
+      const e=Math.round((new Date(t.due)-minD)/86400000)+1;
+      const left=(s/span*100).toFixed(1), width=Math.max(2,((e-s)/span*100)).toFixed(1);
+      return `<div class="gantt-row">
+        <div class="gantt-label" title="${t.title}">${t.title}</div>
+        <div class="gantt-track">
+          <div class="gantt-today" style="left:${todayPct}%"></div>
+          <div class="gantt-bar" style="left:${left}%;width:${width}%;background:${colors[t.priority]};opacity:${t.status==='done'?.5:1}">
+            ${parseFloat(width)>8?t.progress+'%':''}
+          </div>
+        </div>
+      </div>`;
+    }).join('')}
+    <div style="font-size:11px;color:#E24B4A;margin-left:150px;margin-top:4px">▲ today</div>`;
+}
+
+function renderProgress(){
+  document.getElementById('prog-list').innerHTML=tasks.map(t=>`
+    <div class="prog-item">
+      <div class="prog-header">
+        <div style="display:flex;gap:8px;align-items:center">
+          <span class="prog-title">${t.title}</span>
+          <span class="badge ${pClass[t.priority]}">${pLabel[t.priority]}</span>
+        </div>
+        <span class="prog-pct" id="pct-${t.id}">${t.progress}%</span>
+      </div>
+      <div class="prog-track"><div class="prog-fill" id="fill-${t.id}" style="width:${t.progress}%;background:${colors[t.priority]}"></div></div>
+      <input type="range" min="0" max="100" step="1" value="${t.progress}" oninput="updateProgress(${t.id},this.value)">
+    </div>`).join('');
+}
+
+function updateProgress(id,val){
+  const t=tasks.find(x=>x.id===id); if(!t) return;
+  t.progress=parseInt(val);
+  if(t.progress===100) t.status='done';
+  else if(t.progress>0) t.status='doing';
+  else t.status='todo';
+  document.getElementById('fill-'+id).style.width=val+'%';
+  document.getElementById('pct-'+id).textContent=val+'%';
+  renderStats(); renderKanban(); renderGantt(); save();
+}
+
+function addTask(){
+  const title=document.getElementById('new-title').value.trim(); if(!title) return;
+  const priority=document.getElementById('new-priority').value;
+  const status=document.getElementById('new-status').value;
+  const due=document.getElementById('new-due').value||fmt(addDays(today,7));
+  tasks.push({id:nextId++,title,priority,status,progress:status==='done'?100:status==='doing'?20:0,start:fmt(today),due});
+  document.getElementById('new-title').value='';
+  render();
+}
+
+function dragStart(id){ dragId=id; }
+function dragEnd(){ document.querySelectorAll('.col').forEach(c=>c.classList.remove('drag-over')); }
+function dropCard(e,status){
+  e.preventDefault();
+  document.querySelectorAll('.col').forEach(c=>c.classList.remove('drag-over'));
+  const t=tasks.find(x=>x.id===dragId);
+  if(t){ t.status=status; if(status==='done') t.progress=100; render(); }
+}
+
+function handleDrop(e){
+  e.preventDefault();
+  document.getElementById('drop-zone').classList.remove('over');
+  const f=e.dataTransfer.files[0];
+  if(f) alert('File "'+f.name+'" dropped!\n\nClaude API integration coming soon — will auto-extract tasks from this document.');
+}
+
+function switchTab(name,btn){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('view-'+name).classList.add('active');
+}
+
+render();
+</script>
+</body>
+</html>
