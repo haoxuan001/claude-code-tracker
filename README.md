@@ -2,7 +2,7 @@
 
 > Real-time task tracker that syncs with Claude Code — visualize your project progress as you build, from PRD to deployment.
 
-![demo](./assets/demo.gif)
+![demo](./Animation.gif)
 
 ---
 
